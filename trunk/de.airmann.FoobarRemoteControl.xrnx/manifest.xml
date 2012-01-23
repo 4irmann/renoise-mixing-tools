@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RenoiseScriptingTool doc_version="0">
+  <ApiVersion>3</ApiVersion>
+  <Id>de.airmann.MixingTools</Id>
+  <Version>0.1</Version>
+  <Author>Matthias Ehrmann [airmann_pub@online.de]</Author>
+  <Name>Mixing Tools</Name>
+  <Category>command</Category>
+  <Description>Provides various commands which can improve your mixing process</Description>
+  <Homepage>http://code.google.com/p/airmann-mixing-tools/</Homepage>
+</RenoiseScriptingTool>
