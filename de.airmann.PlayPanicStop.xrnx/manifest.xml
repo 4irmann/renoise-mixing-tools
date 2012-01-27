@@ -7,6 +7,6 @@
   <Author>Matthias Ehrmann [airmann_pub@online.de]</Author>
   <Name>Play / Panic Stop</Name>
   <Category>command</Category>
-  <Description>provides play / panic stop command which can be assigned to a key</Description>
-  <Homepage>http://tools.renoise.com</Homepage>
+  <Description>provides a new Renoise play / panic stop command</Description>
+  <Homepage>http://code.google.com/p/airmann-mixing-tools/</Homepage>
 </RenoiseScriptingTool>
