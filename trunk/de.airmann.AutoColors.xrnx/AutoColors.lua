@@ -3,8 +3,8 @@
   AutoColors
   
   Automatically sets track colors by track names, using regular expression filters.
-  E.g. you can assign a filter "*hat*" to a RGB color value. All track names which
-  contain a "hat" string will have the same color.
+  E.g. you can assign a filter "^.*hat$" to a RGB color value. All track names which
+  end with a "hat" string will have the same color.
   
   Copyright 2012 Matthias Ehrmann, 
   
@@ -19,9 +19,9 @@
 --------------------------------------------------------------------------------------]]--
 
 -- data structure for color map entries
-class "AutoColorMapEntry"(renoise.Document.DocumentNode)
+class "AutoColorsMapEntry"(renoise.Document.DocumentNode)
 
-function AutoColorMapEntry:__init()
+function AutoColorsMapEntry:__init()
 
   -- important! call super first
   renoise.Document.DocumentNode.__init(self)
@@ -50,20 +50,31 @@ function AutoColors:__init()
 
   -- member variables
   
-  self.found = false -- flag that indicates that e.g. a filter could be found
-  self.config_path = "config.xml" 
+  self.config_name = "config"
+  self.config_ext = "xml"
+  self.config_path = self.config_name.."."..self.config_ext 
  
   -- preferences 
   
   self.prefs = renoise.Document.create("AutoColorPreferences") {          
     color_map = renoise.Document.DocumentList()
   }    
-  --self.prefs.color_map:insert(renoise.Document.create("AutoColorMapEntry") {
-  --  filters = {""}, color= {0xff,0xff,0xff}, color_blend = 20 
-  --})
-  
-  --self.prefs:save_as(self.config_path)   
-  self.prefs:load_from(self.config_path)  
+  self.prefs.color_map:insert(renoise.Document.create("AutoColorsMapEntry") {
+    filters = { "" }, color= {0xff,0xff,0xff}, color_blend = 20 
+  })  
+  --self.prefs:save_as(self.config_path)   -- just for tests
+  if (io.exists(self.config_path)) then  
+    local success, errmsg = self.prefs:load_from(self.config_path)  
+    if (not success) then
+      -- remove dummy (explanation see below)
+      self.prefs.color_map:remove()
+    end
+  else
+    -- remove dummy entry, which is implicitly needed
+    -- for structure description and loading of preferences, 
+    -- but can be removed, if no prefs are available
+    self.prefs.color_map:remove()
+  end
 
   -- tool registration  
   
@@ -162,16 +173,14 @@ function AutoColors:on_song_created()
     
   for t = 1,#song().tracks do          
     self:on_tracks_changed({type = "insert", index = t})    
-  end
-  
+  end  
 end
 
 -- song pre release handler
 -- this is called right before the song is being released
 function AutoColors:on_song_pre_release()
 
-  TRACE("on_song_pre_release()")    
-  
+  TRACE("on_song_pre_release()")      
   -- TODO free listeners ? Guess this is automatically done by Renoise    
 end
 
@@ -196,9 +205,7 @@ end
 function AutoColors:on_track_name_changed() 
   
   TRACE("on_track_name_changed()")
-  
-  self.found = false      
-  
+    
   -- since we don't know the source track index
   -- we have to iterate over all tracks.
   -- This is not nice, but there's no better solution
@@ -213,16 +220,10 @@ function AutoColors:on_track_name_changed()
     -- add filter
     if (name:find("^add:.*$")) then
    
-      local name = string.sub(name,5)     
-      if (self:find_filter(name)) then
-        
-        self:print_feedback_msg(song().tracks[t], "EXISTS")
-        return 
+      local name = string.sub(name,5)       
+      if (not self:add_filter(song().tracks[t], name)) then
+        return -- error: don't apply filters
       end
-        
-      self:add_filter(song().tracks[t], name)        
-      self:apply_filters()
-      return 
       
     -- remove filter
     elseif (name:find("^rem:.*$")) then
@@ -230,61 +231,70 @@ function AutoColors:on_track_name_changed()
       -- iterate over all tracks and
       -- remove ALL matching filters
       local name = string.sub(name,5) 
-      for u = 1,#song().tracks do
-        self:remove_filter(song().tracks[u], name)        
-      end
+      self:remove_filter(song().tracks[t],name)
+      return -- don't apply filters
       
-      -- switch notification temporarily off to avoid feedback loop      
-      self:remove_track_name_changed_notifier(song().tracks[t])
-      
-      if (self.found) then
-        self:print_feedback_msg(song().tracks[t],"REMOVED")
-      else
-        self:print_feedback_msg(song().tracks[t],"NOT FOUND")
-      end
-      
-      -- switch notification on again      
-      self:add_track_name_changed_notifier(song().tracks[t])
-      
-      return -- just exit for-loop, don't apply filters
-      
-    -- update filter
-    elseif (name:find("upd:.*$")) then
+    -- update color of single filter
+    elseif (name:find("^upd:.*$")) then
     
-      somg().tracks[t].name = string.sub(name,5) 
-      self:update_filter(song().tracks[t], name)          
-      self:apply_filters()
-      return
+      local name = string.sub(name,5) 
+      if (not self:update_filter(song().tracks[t], name)) then
+        return -- error: don't apply filters 
+      end
+    
+    -- update color of group of filters
+    elseif (name:find("^upg:.*$")) then
+    
+      local name = string.sub(name,5) 
+      if (not self:update_group(song().tracks[t], name)) then
+        return -- error: don't apply filters 
+      end
+    
+    -- reset all filters
+    elseif (name:find("^reset:$")) then
+    
+      self:reset_filters()
+      return -- don't apply filters
+      
+    -- save all filters (save as)
+    elseif (name:find("^save:.*$")) then
+      
+      local alt_name = string.sub(name,6)
+      self:save_filters(song().tracks[t],alt_name)
+      return -- don't apply filters      
+      
+    -- load all filters
+    elseif (name:find("^load:.*$")) then
+   
+      local alt_name = string.sub(name,6)
+      if (not self:load_filters(song().tracks[t], alt_name)) then
+        return -- error don't apply filters
+      end
+      
+    -- list all filters
+    elseif (name:find("^lst:$")) then          
+    
+      self:list_filters(song().tracks[t])
+      return -- don't apply filters
+      
     end
-  end    
-    
-  -- no command found: just apply filters
-  self:apply_filters()  
+  end
+   
+  self:apply_filters()    
 end
 
-function AutoColors:print_feedback_msg(track,message)
 
-  TRACE("print_feedback_msg()")
-
-  -- switch notification temporarily off to avoid feedback loop      
-  self:remove_track_name_changed_notifier(track)  
-  
-  track.name = message 
-  
-  -- switch notification on again      
-  self:add_track_name_changed_notifier(track)
-end
-
--- iterate over all tracks/trackanmes an apply filters
+-- iterate over all tracks/trackanmes and apply filters
 function AutoColors:apply_filters()
 
   TRACE("apply_filters()")
   
   for t = 1,#song().tracks do        
+    local name = song().tracks[t].name:lower() 
     for i = 1,#self.prefs.color_map do
       for j = 1,#self.prefs.color_map[i].filters do
         local pattern = (self.prefs.color_map[i].filters[j].value)
-        if (song().tracks[t].name:find(pattern)) then     
+        if (name:find(pattern)) then     
           song().tracks[t].color = 
             { self.prefs.color_map[i].color[1].value, 
               self.prefs.color_map[i].color[2].value, 
@@ -297,67 +307,300 @@ function AutoColors:apply_filters()
 end
 
 -- searches for a specific filter pattern in the filter / colormap list
--- returns true if found, otherwise false
+-- found: returns color_map_index,filter_list_index
+-- not found: returns nil
 function AutoColors:find_filter(filter)
 
   TRACE("find_filter()")
+
+  -- check if filter is empty
+  if (filter == "") then
+    return false
+  end
   
+  local filter_lower = filter:lower()  
   for i = 1,#self.prefs.color_map do
     for j = 1,#self.prefs.color_map[i].filters do
       local pattern = (self.prefs.color_map[i].filters[j].value)
-      if (filter == pattern) then     
-          return true;
+      if (filter_lower == pattern) then     
+          return i,j
       end   
     end
-  end
-    
-  return false;
+  end    
+  return nil
 end
+
+-- return index, or nil if not found
+function AutoColors:find_color(color, color_blend)
   
+  TRACE("find_color()")
+    
+  for i = 1,#self.prefs.color_map do  
+    if (self.prefs.color_map[i].color_blend.value == color_blend) then
+      if (self.prefs.color_map[i].color[1].value == color[1]) then        
+        if (self.prefs.color_map[i].color[2].value == color[2]) then
+          if (self.prefs.color_map[i].color[3].value == color[3]) then                    
+            return i
+          end
+        end
+      end
+    end          
+  end   
+  return nil  
+end
+
+-- add filter
+-- return true: filter added
+-- return false: no filter given, filter already exists, or io error  
 function AutoColors:add_filter(track,filter)   
 
   TRACE("add_filter()")
-          
-  -- update prefs
-  self.prefs.color_map:insert(renoise.Document.create("AutoColorMapEntry") {
-    filters = { filter }, color = track.color, color_blend = track.color_blend
-  })
-  self.prefs:save_as(self.config_path)
 
-  -- switch notification temporarily off to avoid feedback loop      
-  self:remove_track_name_changed_notifier(track)
-      
-  track.name = filter
+  -- check if filter is empty
+  if (filter == "") then
+    self:print_feedback_msg(track, "NO FILTER")
+    return false
+  end
 
-  -- switch notification on again      
-  self:add_track_name_changed_notifier(track)
+  -- check if filter already exists
+  if (self:find_filter(filter) ~= nil) then
+    self:print_feedback_msg(track, "EXISTS")
+    return false
+  end
+
+  -- check if color already exists
+  local index = self:find_color(track.color,track.color_blend)
+  if (index ~= nil) then
+    self.prefs.color_map[index].filters:insert(filter)
+    self:on_update_filter_list()
+  else
+    -- create new color map entry
+    self.prefs.color_map:insert(renoise.Document.create("AutoColorsMapEntry") {
+      filters = { filter:lower() }, color = track.color, color_blend = track.color_blend
+    })
+  end
+    
+  -- save prefs
+  local success,errmsg = self:save_prefs()
+  if (success) then  
+    self:print_feedback_msg(track,filter)  
+  else
+      self:print_feedback_msg(track,errmsg)  
+     return false
+  end 
+  return true 
 end
 
-function AutoColors:update_filter(track,filter_pattern)   
+-- convenience wrapper which combines remove / add
+-- update color of a single filter
+-- return true: update ok
+-- return false: update error
+function AutoColors:update_filter(track,filter)   
 
   TRACE("update_filter()")  
   
-  -- TODO  
+  if (self:remove_filter(track,filter)) then
+    self:add_filter(track,filter)  
+    return true
+  else
+    return false
+  end 
 end
 
+-- update color of a filter group
+-- return true: update ok
+-- return false: update error
+function AutoColors:update_group(track, filter)
+
+  TRACE("update_group()")
+  
+  -- check if filter already exists
+  local i,j = self:find_filter(filter)
+  if (i == nil) then
+    self:print_feedback_msg(track, "NOT FOUND")
+    return false
+  else    
+    self.prefs.color_map[i].color[1].value = track.color[1]
+    self.prefs.color_map[i].color[2].value = track.color[2]
+    self.prefs.color_map[i].color[3].value = track.color[3]
+    self.prefs.color_map[i].color_blend.value = track.color_blend
+    self:on_update_filter_list()
+    self:print_feedback_msg(track,filter)  
+  end
+  return true
+end  
+
+-- iterate over all filter entries and remove all matching filters
+-- return true: filter removed
+-- return false: no filter given, not found or io error
 function AutoColors:remove_filter(track,filter)   
 
   TRACE("remove_filter()")
-        
+  
+  -- check if filter is empty
+  if (filter == "") then  
+    self:print_feedback_msg(track,"NO FILTER")  
+    return false
+  end
+      
+  local filter_lower = filter:lower()
+  local found = false
   for i = 1,#self.prefs.color_map do
     for j = 1,#self.prefs.color_map[i].filters do
-      if (filter == self.prefs.color_map[i].filters[j].value) then
-        self.prefs.color_map:remove(i)
-        self.prefs:save_as(self.config_path)-- update prefs
-        self.found = true
-        return
+      if (filter_lower == self.prefs.color_map[i].filters[j].value) then
+        found = true
+        self.prefs.color_map[i].filters:remove(j)        
+        if (#self.prefs.color_map[i].filters <= 0) then
+          self.prefs.color_map:remove(i)
+        end       
+        break
       end
     end
+    if (i >= #self.prefs.color_map) then
+      break
+    end
+  end  
+  
+  if (found) then   
+    local success,errmsg = self:save_prefs()
+    if (not success) then
+      self:print_feedback_msg(track,errmsg)  
+      return 
+    end      
+    self:print_feedback_msg(track,"REMOVED")
+    return true
   end
+  self:print_feedback_msg(track,"NOT FOUND")
+  return false
 end
+
+-- reset (remove) all filters
+-- return true: ok
+-- return false: io error
+function AutoColors:reset_filters(track)
+
+  TRACE("reset_filters()")
+
+  for i = 1,#self.prefs.color_map do
+    self.prefs.color_map:remove()        
+  end 
+  local success,errmsg = self:save_prefs()     
+  if (success) then
+    self:print_feedback_msg(track,"RESET")
+  else
+    self:print_feedback_msg(track,errmsg)          
+    return false
+  end
+  return true
+end
+
+-- save all filters into another xml document
+-- name is: config_<alt_name>.xml
+-- if the name already exists, the existing
+-- document is moved into config_<alt_name>.xml.back
+-- return true: everythink ok
+-- return false: io error, or empty alt_name
+function AutoColors:save_filters(track,alt_name)
+
+  TRACE("save_filters()")
+  
+  if (alt_name ~= "") then      
+    local config_path_alt = self.config_name.."_"..alt_name.."."..self.config_ext        
+    if (io.exists(config_path_alt)) then        
+      local success, errmsg = 
+        os.move(config_path_alt,config_path_alt..".back")
+      if (not success) then
+        self:print_feedback_msg(track,errmsg) 
+        return false
+      end
+    end
+    
+    local success,errmsg = self.prefs:save_as(config_path_alt)
+    if (not success) then
+      self:print_feedback_msg(track,errmsg)
+      return false
+    end  
+  else
+    self:print_feedback_msg(track,"NO NAME")
+    return false
+  end
+    self:print_feedback_msg(track,"SAVED")
+  return true
+end
+
+-- load all filters from another xml document
+-- name is: config_<alt_name>.xml
+-- return true: everythink ok
+-- return false: not found, io error, or empty alt_name
+function AutoColors:load_filters(track,alt_name)
+  
+  TRACE("load_filters()")
+
+  if (alt_name == "") then      
+    self:print_feedback_msg(track,"NO NAME")
+    return false
+  end
+  
+  local config_path_alt = self.config_name.."_"..alt_name.."."..self.config_ext        
+  if (io.exists(config_path_alt)) then        
+    local success,errmsg = self.prefs:load_from(config_path_alt)          
+    if (not success) then
+      self:print_feedback_msg(track,errmsg)
+      return false
+    end  
+  else
+    self:print_feedback_msg(track,"NOT FOUND")
+    return false
+  end
+  
+  self:print_feedback_msg(track,"LOADED") 
+  return true
+end
+
+-- return -> [success, error_string or nil on success]
+function AutoColors:save_prefs()
+
+  TRACE("save_prefs()")
+  
+  -- if exists do a backup of the old config file
+  if (io.exists(self.config_path)) then  
+    os.move(self.config_path,self.config_path..".back")
+  end
+  
+  -- create a new one
+  return self.prefs:save_as(self.config_path)
+end 
+
+-- print feedback message in the name input field of a track
+-- thereby switch notification temporarily off to avoid feedback loop      
+function AutoColors:print_feedback_msg(track,message)
+
+  TRACE("print_feedback_msg()")
+
+  self:remove_track_name_changed_notifier(track)    
+  track.name = message   
+  self:add_track_name_changed_notifier(track)
+end
+
+-- toggle filter list dialog
+function AutoColors:list_filters(track)
+
+  TRACE("list_filters()")
+  
+  if (not self:filter_dialog_visible()) then
+    self:print_feedback_msg(track, "SHOW")  
+  else
+    self:print_feedback_msg(track, "HIDE")
+  end  
+  self:toggle_filter_dialog()
+end
+
 
 -- filter dialog handler
 function AutoColors:toggle_filter_dialog()
+
+  TRACE("toggle_filter_dialog()")
+
   if (self:filter_dialog_visible()) then
     self.filter_dialog:close()
   else
@@ -377,6 +620,7 @@ function AutoColors:filter_dialog_visible()
   return self.filter_dialog and self.filter_dialog.visible
 end
 
+-- called whenever the color map has changed
 function AutoColors:on_update_filter_list()
 
   TRACE("on_update_filter_list()")
@@ -392,7 +636,7 @@ function AutoColors:update_filter_view()
   TRACE("update_filter_view()")
   
   self.filter_list.text = "[ R, G, B ]   [BLEND %] <- FILTERS\n"..
-                          "````````````````````````````````````````````````````````````````````\n"
+                          "````````````````````````````````````````````````````````````````\n"
   
   if (#self.prefs.color_map <= 0) then
     self.filter_list.text = self.filter_list.text..">> NO FILTERS DEFINED ! <<\n"    
@@ -414,27 +658,28 @@ function AutoColors:update_filter_view()
   end
   
   local help = "\nCOMMANDS - enter them in any track's name input field:\n".. 
-               "````````````````````````````````````````````````````````````````````\n"..              
+               "````````````````````````````````````````````````````````````````\n"..              
                "add:<regex>    add a new simple text filter or regex\n"..
-               "upd:<regex>    update an already present filter\n"..
-               "rem:<regex>    remove filter\n"..
-               "res:                     reset = remove all filters\n"..
-               "lst:                      show this dialog\n\n"..
+               "upd:<regex>    update color of a single filter\n"..
+               "upg:<regex>    update color of the filter's group\n"..
+               "rem:<regex>    remove filter\n"..               
+               "lst:                      show/hide this dialog\n\n"..
+               "reset:                     reset = remove all filters\n"..
+               "save:<name>       save all filters into xml file\n"..
+               "load:<name>        load all filters from xml file\n\n"..
                
                "REGULAR EXPRESSIONS:\n"..
-               "````````````````````````````````````````````````````````````````````\n"..
+               "````````````````````````````````````````````````````````````````\n"..
                "CHARS:    ^ start     $ end    . any     ? 0..1      * 0..n      + 1..n\n".. 
-               "                   %l/u% lcase/ucase     %d digit      %d2 two digits\n"..
-               " SETS:   [123] any    [a-z] range    [^123] neg set\n\n"..               
-               
-               "````````````````````````````````````````````````````````````````````\n"..
+               "                 %d digit      %d2 two digits\n"..
+               " SETS:   [123] any    [a-z] range    [^123] neg set\n\n"..                             
+               " HINT: filter matching works always case-insensitive !\n\n"..
+                              
+               "````````````````````````````````````````````````````````````````\n"..
                "EXAMPLES:\n\n"..  
-               "snare     ^kick[123]$      drum*     synth.+  \n\n"..
+               "snare     ^kick[123]$      ^.*drum     synth.+  \n\n"..
                "More info:  http://lua-users.org/wiki/PatternsTutorial\n\n"..
                "(c) 2012, Airmann Productions"
     
   self.filter_list.text = self.filter_list.text..help
 end  
-
-  
-  

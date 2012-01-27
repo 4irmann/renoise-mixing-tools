@@ -17,7 +17,7 @@
 -- {"^Display:"} " -> show traces, starting with "Display:" only
 -- {"^ControlMap:", "^Display:"} -> show "Display:" and "ControlMap:"
 
-local __trace_filters = { "" }
+local __trace_filters = { ".*" }
 
 --------------------------------------------------------------------------------
 -- TRACE impl
