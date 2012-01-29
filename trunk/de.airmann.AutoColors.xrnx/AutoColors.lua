@@ -351,8 +351,7 @@ function AutoColors:find_color(color, color_blend)
     if (cb == cb1) then
       if (self.prefs.color_map[i].color[1].value == color[1]) then        
         if (self.prefs.color_map[i].color[2].value == color[2]) then
-          if (self.prefs.color_map[i].color[3].value == color[3]) then    
-            print("HIT !!!!!!!!!!!!!!!!!")                
+          if (self.prefs.color_map[i].color[3].value == color[3]) then                
             return i
           end
         end
@@ -382,7 +381,6 @@ function AutoColors:add_filter(track,filter)
   end
 
   -- check if color already exists
-  print("COLOR_BLEND: "..track.color_blend)
   local index = self:find_color(track.color,track.color_blend)
   if (index ~= nil) then
     self.prefs.color_map[index].filters:insert(filter)
@@ -721,7 +719,7 @@ function AutoColors:update_filter_view()
                "EXAMPLES:\n\n"..  
                "add:snare     add:^kick[123]$,bd[123]   ^.*drum     synth.+  \n\n"..
                "More info:  http://lua-users.org/wiki/PatternsTutorial\n\n"..
-               "(c) 2012, Airmann Productions"
+               "(c) 2012, M. Ehrmann"
     
   self.filter_list.text = self.filter_list.text..help
 end  
