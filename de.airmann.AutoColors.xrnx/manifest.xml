@@ -2,10 +2,10 @@
 <RenoiseScriptingTool doc_version="0">
   <ApiVersion>3</ApiVersion>
   <Id>de.airmann.AutoColors</Id>
-  <Version>1.0</Version>
+  <Version>1.01</Version>
   <Author>Matthias Ehrmann [airmann_pub@online.de]</Author>
   <Name>AutoColors</Name>
   <Category>Application</Category>
-  <Description>Automatically sets track colors by tracknames, using regular expression filters</Description>
+  <Description>Automatically set track colors by track names, using regular expression filters</Description>
   <Homepage>http://code.google.com/p/airmann-mixing-tools/</Homepage>
 </RenoiseScriptingTool>
