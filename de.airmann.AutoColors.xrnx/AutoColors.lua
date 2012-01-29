@@ -6,6 +6,8 @@
   E.g. you can assign a filter "^.*hat$" to a RGB color value. All track names which
   end with a "hat" string will have the same color.
   
+  The basic idea of this tool was taken from SWS Reaper extensions
+  
   Copyright 2012 Matthias Ehrmann, 
   
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -211,68 +213,76 @@ function AutoColors:on_track_name_changed()
   -- This is not nice, but there's no better solution
   for t = 1,#song().tracks do      
    
-    local name = song().tracks[t].name
+    local args = song().tracks[t].name
      
     ------------------------------------------------------------
     -- handle commands
     -- these commands modify the filters / color mapping list
      
     -- add filter
-    if (name:find("^add:.*$")) then
+    if (args:find("^add:.*$")) then
    
-      local name = string.sub(name,5)       
-      if (not self:add_filter(song().tracks[t], name)) then
-        return -- error: don't apply filters
+      local filters = self:get_filters(song().tracks[t],string.sub(args,5))
+      for f = 1,#filters do      
+        if (not self:add_filter(song().tracks[t], filters[f])) then
+          return -- error: don't apply filters
+        end
       end
       
     -- remove filter
-    elseif (name:find("^rem:.*$")) then
+    elseif (args:find("^rem:.*$")) then
     
       -- iterate over all tracks and
       -- remove ALL matching filters
-      local name = string.sub(name,5) 
-      self:remove_filter(song().tracks[t],name)
+      local filters = self:get_filters(song().tracks[t],string.sub(args,5))  
+      for f = 1,#filters do
+        if (not self:remove_filter(song().tracks[t], filters[f])) then
+          return 
+        end          
+      end
       return -- don't apply filters
       
     -- update color of single filter
-    elseif (name:find("^upd:.*$")) then
+    elseif (args:find("^upd:.*$")) then
     
-      local name = string.sub(name,5) 
-      if (not self:update_filter(song().tracks[t], name)) then
-        return -- error: don't apply filters 
+      local filters = self:get_filters(song().tracks[t],string.sub(args,5))  
+      for f = 1,#filters do      
+        if (not self:update_filter(song().tracks[t], filters[f])) then
+          return -- error: don't apply filters 
+        end
       end
-    
+      
     -- update color of group of filters
-    elseif (name:find("^upg:.*$")) then
+    elseif (args:find("^upg:.*$")) then
     
-      local name = string.sub(name,5) 
-      if (not self:update_group(song().tracks[t], name)) then
+      local filter = string.sub(args,5)
+      if (not self:update_group(song().tracks[t], filter)) then
         return -- error: don't apply filters 
       end
     
     -- reset all filters
-    elseif (name:find("^reset:$")) then
+    elseif (args:find("^reset:$")) then
     
-      self:reset_filters()
+      self:reset_filters(song().tracks[t])
       return -- don't apply filters
       
     -- save all filters (save as)
-    elseif (name:find("^save:.*$")) then
+    elseif (args:find("^save:.*$")) then
       
-      local alt_name = string.sub(name,6)
+      local alt_name = string.sub(args,6)
       self:save_filters(song().tracks[t],alt_name)
       return -- don't apply filters      
       
     -- load all filters
-    elseif (name:find("^load:.*$")) then
+    elseif (args:find("^load:.*$")) then
    
-      local alt_name = string.sub(name,6)
+      local alt_name = string.sub(args,6)
       if (not self:load_filters(song().tracks[t], alt_name)) then
         return -- error don't apply filters
       end
       
     -- list all filters
-    elseif (name:find("^lst:$")) then          
+    elseif (args:find("^lst:$")) then          
     
       self:list_filters(song().tracks[t])
       return -- don't apply filters
@@ -336,10 +346,13 @@ function AutoColors:find_color(color, color_blend)
   TRACE("find_color()")
     
   for i = 1,#self.prefs.color_map do  
-    if (self.prefs.color_map[i].color_blend.value == color_blend) then
+    local cb = color_blend
+    local cb1 = self.prefs.color_map[i].color_blend.value        
+    if (cb == cb1) then
       if (self.prefs.color_map[i].color[1].value == color[1]) then        
         if (self.prefs.color_map[i].color[2].value == color[2]) then
-          if (self.prefs.color_map[i].color[3].value == color[3]) then                    
+          if (self.prefs.color_map[i].color[3].value == color[3]) then    
+            print("HIT !!!!!!!!!!!!!!!!!")                
             return i
           end
         end
@@ -369,6 +382,7 @@ function AutoColors:add_filter(track,filter)
   end
 
   -- check if color already exists
+  print("COLOR_BLEND: "..track.color_blend)
   local index = self:find_color(track.color,track.color_blend)
   if (index ~= nil) then
     self.prefs.color_map[index].filters:insert(filter)
@@ -460,6 +474,7 @@ function AutoColors:remove_filter(track,filter)
       break
     end
   end  
+  self:update_filter_view()
   
   if (found) then   
     local success,errmsg = self:save_prefs()
@@ -582,6 +597,34 @@ function AutoColors:print_feedback_msg(track,message)
   self:add_track_name_changed_notifier(track)
 end
 
+
+-- THIS FUNCTION WAS TAKEN FROM http://lua-users.org/wiki/SplitJoin
+-- It's not part of the above mentioned Apache License !
+--[[ written for Lua 5.1
+split a string by a pattern, take care to create the "inverse" pattern 
+yourself. default pattern splits by white space.
+]]
+string.split = function(str, pattern)
+  pattern = pattern or "[^%s]+"
+  if pattern:len() == 0 then pattern = "[^%s]+" end
+  local parts = {__index = table.insert}
+  setmetatable(parts, parts)
+  str:gsub(pattern, parts)
+  setmetatable(parts, nil)
+  parts.__index = nil
+  return parts
+end
+
+-- helper function
+function AutoColors:get_filters(track,args)
+  if (args == "") then 
+    self:print_feedback_msg(track,"EMPTY")
+    return { }
+  else
+    return args:split("[^,%s]+")
+  end
+end
+
 -- toggle filter list dialog
 function AutoColors:list_filters(track)
 
@@ -594,7 +637,6 @@ function AutoColors:list_filters(track)
   end  
   self:toggle_filter_dialog()
 end
-
 
 -- filter dialog handler
 function AutoColors:toggle_filter_dialog()
@@ -659,11 +701,11 @@ function AutoColors:update_filter_view()
   
   local help = "\nCOMMANDS - enter them in any track's name input field:\n".. 
                "````````````````````````````````````````````````````````````````\n"..              
-               "add:<regex>    add a new simple text filter or regex\n"..
-               "upd:<regex>    update color of a single filter\n"..
-               "upg:<regex>    update color of the filter's group\n"..
-               "rem:<regex>    remove filter\n"..               
-               "lst:                      show/hide this dialog\n\n"..
+               "add:<regex>[,<regex>,..]    add new filter(s)\n"..
+               "rem:<regex>[,<regex>,..]    remove filter(s)\n"..               
+               "upd:<regex>[,<regex>,..]    update color of single filter(s)\n"..
+               "upg:<regex>                 update color of a filter's group\n"..               
+               "lst:                        show/hide this dialog\n\n"..
                "reset:                     reset = remove all filters\n"..
                "save:<name>       save all filters into xml file\n"..
                "load:<name>        load all filters from xml file\n\n"..
@@ -677,7 +719,7 @@ function AutoColors:update_filter_view()
                               
                "````````````````````````````````````````````````````````````````\n"..
                "EXAMPLES:\n\n"..  
-               "snare     ^kick[123]$      ^.*drum     synth.+  \n\n"..
+               "add:snare     add:^kick[123]$,bd[123]   ^.*drum     synth.+  \n\n"..
                "More info:  http://lua-users.org/wiki/PatternsTutorial\n\n"..
                "(c) 2012, Airmann Productions"
     
