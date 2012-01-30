@@ -1,6 +1,6 @@
 --[[----------------------------------------------------------------------------
 
-  Foobar 20000 Remote Control
+  Foobar 20000 Remote Control (over http)
   
   Provides Renoise commands for controlling foobar2000 media player over http
   (local or remote network) from inside Renoise. This can be helpfull for 
@@ -11,18 +11,18 @@
   
   In order to use this tool, the foobar 2000 "httpd_control" plugin must be 
   installed and properly  configured (listen e.g. on localhost:8888). Moreover, 
-  you have to create a  "renoise" httpd_control theme (sub dir) in httpd_control 
-  home directory. Attention: Renoise soundcard samplerate must be the same as 
-  in foobar2000, otherwise foobar probably won't play. 
+  you have to create a "renoise" httpd_control theme (sub dir) in httpd_control 
+  home directory. Attention when running on localhost: Renoise soundcard 
+  samplerate must be the same as in foobar2000, otherwise foobar probably won't play. 
   
   Hints: 
   
   of course, alternatively to this "solution" you could also use Foobar 
   "global" Keyboard shortcuts. But in this case you can't control it
   using a midi controller, and you can't control a foobar2000 instance which
-  is running somewhere else than on 127.0.0.1/localhost.
+  is running somewhere else in the web than on 127.0.0.1 = localhost.
   
-  use the foobar "console" for debugging, and add the extensions 
+  I recommend to use the foobar "console" for debugging, and add the extensions 
   "waveform seeking" and "foo_seek" to foobar. Waveform seek is similar
   to soundcloud waveform display. With foo_seek A/B looping in songs is possible. 
   
@@ -41,9 +41,31 @@
   
 ----------------------------------------------------------------------------]]--
 
+-- default preferences
+prefs = renoise.Document.create("FoobarRemoteControlPreferences") { 
+
+    -- IP address and port number of foobar httpd control server
+    foobar_http_control_server = "127.0.0.1",    
+    foobar_http_control_server_port = "8888",
+    
+    -- client connection and receive timeout in milliseconds
+    connection_timeout = 2000,
+    receive_timeout = 500
+}
+
+if (io.exists("config.xml")) then
+  prefs:load_from("config.xml")
+else
+  prefs:save_as("config.xml") -- just for initial generation
+end
 
 renoise.tool():add_keybinding {
   name = "Global:Transport:FB2K Start",
+  invoke = function() fb2k_start() end
+}
+
+renoise.tool():add_midi_mapping {
+  name = "Global:Transport:FB2k Start",
   invoke = function() fb2k_start() end
 }
 
@@ -52,10 +74,21 @@ renoise.tool():add_keybinding {
   invoke = function() fb2k_stop() end
 }
 
+renoise.tool():add_midi_mapping {
+  name = "Global:Transport:FB2k Stop",
+  invoke = function() fb2k_stop() end
+}
+
 renoise.tool():add_keybinding {
   name = "Global:Transport:FB2K PlayOrPause",
   invoke = function() fb2k_play_or_pause() end
 }
+
+renoise.tool():add_midi_mapping {
+  name = "Global:Transport:FB2k PlayOrPause",
+  invoke = function() fb2k_play_or_pause() end
+}
+
 
 -- Start
 function fb2k_start(param1)
@@ -72,17 +105,19 @@ function fb2k_play_or_pause(param1)
   fb2k_cmd("PlayOrPause",param1)
 end
 
-function fb2k_cmd(cmd,param1)
 
 -- HTTP / GET client
-
--- create a TCP socket and connect it to localhost:8888 http (= foobar
+-- create a TCP socket and connect it e.g. to localhost:8888 http (= foobar
 -- http_control), giving up the connection attempt after 2 seconds
+function fb2k_cmd(cmd,param1)
 
-  local connection_timeout = 2000
+  local connection_timeout = prefs.connection_timeout.value
+  local http_server = prefs.foobar_http_control_server.value
+  local http_server_port = prefs.foobar_http_control_server_port.value
     
   local client, socket_error = renoise.Socket.create_client(
-    "127.0.0.1", 8888, renoise.Socket.PROTOCOL_TCP, connection_timeout)
+    http_server, http_server_port,
+      renoise.Socket.PROTOCOL_TCP, connection_timeout)
    
   if socket_error then 
     renoise.app():show_warning(socket_error)
@@ -90,7 +125,8 @@ function fb2k_cmd(cmd,param1)
   end
 
   -- Send foobar command as HTTP request
-  local message = "GET /renoise/?cmd="..cmd.." HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n"
+  local message = "GET /renoise/?cmd="..cmd
+                    .." HTTP/1.0\r\nHost: "..http_server.."\r\n\r\n"
   local succeeded, socket_error = client:send(message)
     
   if (socket_error) then 
@@ -105,13 +141,13 @@ function fb2k_cmd(cmd,param1)
   local receive_content = ""
 
   while (true) do
-    local receive_timeout = 500
+    local receive_timeout = prefs.receive_timeout.value
   
     local message, socket_error = 
       client:receive("*line", receive_timeout)
     
     if (message) then 
-      receive_content = receive_content .. message .. "\n"
+      receive_content = receive_content..message.."\n"
   
     else
       if (socket_error == "timeout" or 
@@ -122,7 +158,7 @@ function fb2k_cmd(cmd,param1)
         break
       else
         renoise.app():show_warning(
-          "'socket reveive' failed with the error: " .. socket_error)
+          "'socket reveive' failed with the error: "..socket_error)
         break
       end
     end
@@ -135,16 +171,17 @@ function fb2k_cmd(cmd,param1)
 
   -- show what we've got
   if (receive_succeeded and #receive_content > 0) then
+    -- just for debugging
     --renoise.app():show_prompt(
-    --"GET / HTTP/1.0 response", 
-    --receive_content, 
-    --{"OK"}
+    --  "GET / HTTP/1.0 response", 
+    --    receive_content, 
+    --      {"OK"}
   --)
   else
     renoise.app():show_prompt(
-    "GET / HTTP/1.0 response", 
-    "Socket receive timeout.", 
-    {"OK"}
+      "GET / HTTP/1.0 response", 
+        "Socketreceive timeout.", 
+          {"OK"}
   ) 
   end
 
