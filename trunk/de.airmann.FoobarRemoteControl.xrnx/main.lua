@@ -19,11 +19,12 @@
   
   of course, alternatively to this "solution" you could also use Foobar 
   "global" Keyboard shortcuts. But in this case you can't control it
-  using a midi controller.
+  using a midi controller, and you can't control a foobar2000 instance which
+  is running somewhere else than on 127.0.0.1/localhost.
   
   use the foobar "console" for debugging, and add the extensions 
   "waveform seeking" and "foo_seek" to foobar. Waveform seek is similar
-  to soundcloud. With foo_seek A/B looping in songs is possible. 
+  to soundcloud waveform display. With foo_seek A/B looping in songs is possible. 
   
   Copyright 2011 Matthias Ehrmann, 
   
