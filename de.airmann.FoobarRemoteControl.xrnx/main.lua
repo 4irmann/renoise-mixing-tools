@@ -41,17 +41,65 @@
   
 ----------------------------------------------------------------------------]]--
 
+require "Helpers"
+
 -- default preferences
-prefs = renoise.Document.create("FoobarRemoteControlPreferences") { 
+local prefs = renoise.Document.create("FoobarRemoteControlPreferences") { 
 
     -- IP address and port number of foobar httpd control server
     foobar_http_control_server = "127.0.0.1",    
-    foobar_http_control_server_port = "8888",
+    foobar_http_control_server_port = 8888,
     
     -- client connection and receive timeout in milliseconds
     connection_timeout = 2000,
-    receive_timeout = 500
+    receive_timeout = 500,
+    
+    -- Xfade Type
+    -- 0 = Constant Power (n=0)
+    -- 1 = Constant Power Slow Fade (n=1)
+    -- 3 = Constant Power Slow Cut (n=3)
+    -- 10 = Constant Power Fast Cut (n=10)
+    xfade_type = 0
 }
+
+-- data structure for virtual device parameters
+class "VirtualDeviceParameter"(renoise.Document.DocumentNode)
+
+function VirtualDeviceParameter:__init()
+
+  -- important! call super first
+  renoise.Document.DocumentNode.__init(self)
+  
+  self.name = "n/a"
+  self.polarity = renoise.DeviceParameter.POLARITY_UNIPOLAR
+  self.value_min = 0
+  self.value_max = 127
+  self.value_quantum = 0.5
+  self.value_default = 127
+  self.value = 0    
+end
+
+-- stores foobar volume (0..100)
+local fb2k_volume = VirtualDeviceParameter()
+fb2k_volume.name = "fb2k_foobar_volume"
+fb2k_volume.value_min = 0
+fb2k_volume.value_max = 100
+fb2k_volume.value = 100
+
+-- stores foobar playing position (0..100)
+local fb2k_position = VirtualDeviceParameter()
+fb2k_position.name = "fb2k_foobar_position"
+fb2k_position.value_min = 0
+fb2k_position.value_max = 100
+fb2k_position.value = 0
+
+-- stores xfade position (7bit 0..127)
+-- 0 = only Renoise
+-- 127 = only foobar
+local fb2k_xfade_position = VirtualDeviceParameter() 
+fb2k_xfade_position.name = "fb2k_xfade_pos"
+fb2k_xfade_position.value = 127
+              
 
 if (io.exists("config.xml")) then
   prefs:load_from("config.xml")
@@ -59,36 +107,132 @@ else
   prefs:save_as("config.xml") -- just for initial generation
 end
 
+-- Start
 renoise.tool():add_keybinding {
-  name = "Global:Transport:FB2K Start",
+  name = "Global:Tools:FB2K Start",
   invoke = function() fb2k_start() end
 }
-
 renoise.tool():add_midi_mapping {
-  name = "Global:Transport:FB2k Start",
-  invoke = function() fb2k_start() end
+  name = "Global:Tools:FB2k Start [Trigger]",
+  invoke =  function(message) 
+              if (message:is_trigger()) then
+                fb2k_start() 
+              end
+            end
 }
 
+-- Stop
 renoise.tool():add_keybinding {
-  name = "Global:Transport:FB2K Stop",
-  invoke = function() fb2k_stop() end
+  name = "Global:Tools:FB2K Stop [Trigger]",
+  invoke = function() fb2k_stop() end 
 }
-
 renoise.tool():add_midi_mapping {
-  name = "Global:Transport:FB2k Stop",
-  invoke = function() fb2k_stop() end
+  name = "Global:Tools:FB2k Stop",
+  invoke =  function(message)
+              if (message:is_trigger()) then
+                fb2k_stop() 
+              end
+            end  
 }
 
+
+-- Play/Pause
 renoise.tool():add_keybinding {
-  name = "Global:Transport:FB2K PlayOrPause",
+  name = "Global:Tools:FB2K PlayOrPause",
   invoke = function() fb2k_play_or_pause() end
 }
-
 renoise.tool():add_midi_mapping {
-  name = "Global:Transport:FB2k PlayOrPause",
-  invoke = function() fb2k_play_or_pause() end
+  name = "Global:Tools:FB2k PlayOrPause [Trigger]",
+  invoke =  function(message) 
+              if (message:is_trigger()) then
+                fb2k_play_or_pause() 
+              end
+            end  
 }
 
+-- Next
+renoise.tool():add_keybinding {
+  name = "Global:Tools:FB2K StartNext",
+  invoke = function() fb2k_start_next() end
+}
+renoise.tool():add_midi_mapping {
+  name = "Global:Tools:FB2k StartNext [Trigger]",
+  invoke =  function(message) 
+              if (message:is_trigger()) then
+                fb2k_start_next() 
+              end
+            end  
+}
+
+-- Previous
+renoise.tool():add_keybinding {
+  name = "Global:Tools:FB2K StartPrevious",
+  invoke = function() fb2k_start_previous() end
+}
+renoise.tool():add_midi_mapping {
+  name = "Global:Tools:FB2k StartPrevious [Trigger]",
+  invoke =  function(message) 
+              if (message:is_trigger()) then
+                fb2k_start_previous() 
+              end
+            end  
+}
+
+-- Volume (so far just midi)
+renoise.tool():add_midi_mapping {
+  name = "Global:Tools:FB2k SetVolume [Set]",
+  invoke =  function(message)               
+              fb2k_volume.value = parameter_message_value(message,fb2k_volume)              
+              fb2k_set_volume(fb2k_volume)
+            end            
+}
+
+-- Seek (so far just midi)
+renoise.tool():add_midi_mapping {
+  name = "Global:Tools:FB2k SeekTo [Set]",
+  invoke =  function(message)               
+              fb2k_position.value = parameter_message_value(message,fb2k_position)                           
+              fb2k_seek_to(fb2k_position) 
+            end            
+}
+
+--- XFade Renoise-Foobar (so far just midi)
+renoise.tool():add_midi_mapping {
+  name = "Global:Tools:FB2k XFadeRenoiseFB2K [Set]",
+  invoke =  function(message)                 
+              fb2k_xfade_position.value = parameter_message_value(message,fb2k_xfade_position)              
+              fb2k_xfade(fb2k_xfade_position) 
+            end            
+}
+
+-- precision: nr of decimal places
+function round(value,decimalPlaces)
+  return math.floor(value*10^decimalPlaces+0.5)/10^decimalPlaces 
+end
+
+--  Constant Power XFade
+-- See http://math.stackexchange.com/questions/4621/simple-formula-for-curve-of-dj-crossfader-volume-dipped
+-- x: 0.0 - 1.0 
+-- y: 0.0 - 1.0
+function fb2k_const_pow_xfade(x,n)   
+  return math.cos(math.pi*0.25*(((2*x-1)^(2*n+1)+1)))
+end
+
+-- XFade
+function fb2k_xfade(devPara)
+
+  print("XFade Pos: "..devPara.value)
+  local x = devPara.value / devPara.value_max
+  local n = prefs.xfade_type.value
+  
+  local renoise_vol = fb2k_const_pow_xfade(x,n) 
+  master_track().postfx_volume.value = renoise_vol
+  print("REN VOL: "..renoise_vol)
+    
+  fb2k_volume.value = 
+    fb2k_const_pow_xfade(1.0-x,n)*fb2k_volume.value_max
+  fb2k_set_volume(fb2k_volume)  
+end
 
 -- Start
 function fb2k_start(param1)
@@ -105,7 +249,29 @@ function fb2k_play_or_pause(param1)
   fb2k_cmd("PlayOrPause",param1)
 end
 
+-- StartNext
+function fb2k_start_next(param1)
+  fb2k_cmd("StartNext", param1)
+end
 
+-- StartPrevious
+function fb2k_start_previous(param1)
+  fb2k_cmd("StartPrevious", param1)
+end
+
+-- Volume 
+function fb2k_set_volume(devPara)  
+  local value = math.floor(devPara.value+devPara.value_quantum)
+  fb2k_cmd("Volume",value)
+  print("FOO VOL: "..value)
+end
+
+-- Seek 
+function fb2k_seek_to(devPara)
+  local value = math.floor(devPara.value+devPara.value_quantum)
+  fb2k_cmd("Seek",value)
+end
+  
 -- HTTP / GET client
 -- create a TCP socket and connect it e.g. to localhost:8888 http (= foobar
 -- http_control), giving up the connection attempt after 2 seconds
@@ -115,9 +281,7 @@ function fb2k_cmd(cmd,param1)
   local http_server = prefs.foobar_http_control_server.value
   local http_server_port = prefs.foobar_http_control_server_port.value
     
-  local client, socket_error = renoise.Socket.create_client(
-    http_server, http_server_port,
-      renoise.Socket.PROTOCOL_TCP, connection_timeout)
+  local client, socket_error = renoise.Socket.create_client(http_server, http_server_port,renoise.Socket.PROTOCOL_TCP, connection_timeout)
    
   if socket_error then 
     renoise.app():show_warning(socket_error)
@@ -126,9 +290,12 @@ function fb2k_cmd(cmd,param1)
 
   -- Send foobar command as HTTP request
   local message = "GET /renoise/?cmd="..cmd
-                    .." HTTP/1.0\r\nHost: "..http_server.."\r\n\r\n"
+  if (param1 ~= nil) then
+    message = message.."&param1="..param1
+  end
+  message = message.." HTTP/1.0\r\nHost: "..http_server.."\r\n\r\n"
+  
   local succeeded, socket_error = client:send(message)
-    
   if (socket_error) then 
     renoise.app():show_warning(socket_error)
     return
