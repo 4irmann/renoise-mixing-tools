@@ -2,7 +2,8 @@
 <FoobarRemoteControlPreferences doc_version="0">
   <foobar_http_control_server_port>8888</foobar_http_control_server_port>
   <connection_timeout>2000</connection_timeout>
-  <xfade_type>0</xfade_type>
+  <xfade_default_type>dipped</xfade_default_type>
+  <linked_volumes>true</linked_volumes>
   <foobar_http_control_server>127.0.0.1</foobar_http_control_server>
   <receive_timeout>500</receive_timeout>
 </FoobarRemoteControlPreferences>

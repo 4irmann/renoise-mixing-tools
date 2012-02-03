@@ -2,7 +2,7 @@
 <RenoiseScriptingTool doc_version="0">
   <Name>Foobar2000 Remote Control</Name>
   <Id>de.airmann.FoobarRemoteControl</Id>
-  <Version>0.2</Version>
+  <Version>0.3</Version>
   <ApiVersion>3</ApiVersion>
   <Author>Matthias Ehrmann [airmann_pub@online.de]</Author>
   <AutoUpgraded>false</AutoUpgraded>
