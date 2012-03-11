@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RenoiseScriptingTool doc_version="0">
+  <ApiVersion>3</ApiVersion>
+  <Id>de.airmann.AutoColors</Id>
+  <Version>1.02</Version>
+  <Author>Matthias Ehrmann [airmann_pub@online.de]</Author>
+  <Name>AutoColors</Name>
+  <Category>Application</Category>
+  <Description>Automatically set track colors by track names, using regular expression filters</Description>
+  <Homepage>http://code.google.com/p/airmann-mixing-tools/</Homepage>
+</RenoiseScriptingTool>
