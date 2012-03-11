@@ -53,6 +53,53 @@ function play_full_stop_hard()
   end
 end
 
+function play_full_stop_ramped()
+  
+  if (renoise.song().transport.playing) then
+  
+    -- Add a new timer for ramping down/up
+    if (not renoise.tool():has_timer(ramp_down())) then
+      renoise.tool():add_timer(ramp_down(),500)
+    end
+  
+    --local tracks = renoise.song().tracks
+    --for t = 1,#tracks do
+    --  if (tracks[t].type == renoise.Track.TRACK_TYPE_MASTER) then
+    --    renoise.song().tracks[t].postfx_volume.value = 0.0
+    --  end
+    --end
+
+    --renoise.song().transport:panic()
+  else
+
+    local tracks = renoise.song().tracks
+    for t = 1,#tracks do
+      if (tracks[t].type == renoise.Track.TRACK_TYPE_MASTER) then
+        renoise.song().tracks[t].postfx_volume.value = math.db2lin(0)
+      end
+    end
+  
+    local start_mode = renoise.Transport.PLAYMODE_RESTART_PATTERN
+    renoise.song().transport:start(start_mode)  
+  end
+end
+
+function ramp_down()
+  --for t = 1,#renoise.song().tracks do
+  print("start")
+  --  if (renoise.song().tracks[t].type == renoise.Track.TRACK_TYPE_MASTER) then
+  --    local current_value = renoise.song().tracks[t].postfx_volume.value - math.db2lin(10)           
+  --    if (current_value < 0.0) then
+  --      current_value = 0.0
+        renoise.tool():remove_timer(ramp_down())
+  --    end
+  --    print(current_value) 
+  --    renoise.song().tracks[t].postfx_volume.value = current_value
+  --    return;
+  --  end
+  --end      
+end
+
 --[[ debug ]]--------------------------------------------------------------]]--
 
 _AUTO_RELOAD_DEBUG = true
