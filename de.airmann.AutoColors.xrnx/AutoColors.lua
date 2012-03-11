@@ -17,7 +17,10 @@
   Unless required by applicable law or agreed to in writing, software distributed 
   under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR 
   CONDITIONS OF ANY KIND, either express or implied. See the License for the specific 
-  language governing permissions and limitations under the License.  
+  language governing permissions and limitations under the License.
+  
+  TODO: improve performance to find mst. See GlobalMidiActions.lua
+    
 --------------------------------------------------------------------------------------]]--
 
 -- data structure for color map entries
@@ -35,7 +38,6 @@ function AutoColorsMapEntry:__init()
   }
   
 end
-
 
 -- main class 
 class "AutoColors"
@@ -93,11 +95,15 @@ function AutoColors:__init()
   }  
 
   renoise.tool():add_midi_mapping {
-    name = "Global:Tools:Show AutoColor Filters",
-    invoke = function() self:toggle_filter_dialog() end,
+    name = "Global:Tools:Show AutoColor Filters [Trigger]",
+    invoke =  function(message) 
+                if (message:is_trigger()) then
+                  self:toggle_filter_dialog() 
+                end
+              end,
     selected = function() return self:filter_dialog_visible() end
   }  
-    
+  
   -- add new song observer
   if (not renoise.tool().app_new_document_observable:has_notifier(
     self,self.on_song_created)) then

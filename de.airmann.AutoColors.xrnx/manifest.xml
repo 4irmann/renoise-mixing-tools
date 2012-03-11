@@ -2,7 +2,7 @@
 <RenoiseScriptingTool doc_version="0">
   <ApiVersion>3</ApiVersion>
   <Id>de.airmann.AutoColors</Id>
-  <Version>1.01</Version>
+  <Version>1.02</Version>
   <Author>Matthias Ehrmann [airmann_pub@online.de]</Author>
   <Name>AutoColors</Name>
   <Category>Application</Category>
