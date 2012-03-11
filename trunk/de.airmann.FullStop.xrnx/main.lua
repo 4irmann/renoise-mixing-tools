@@ -35,8 +35,12 @@ renoise.tool():add_keybinding {
 }
  
 renoise.tool():add_midi_mapping {
-  name = "Global:Transport:Play/Full Stop",
-  invoke = function() play_full_stop_hard() end
+  name = "Global:Transport:Play/Full Stop [Trigger]",
+  invoke =  function(message) 
+              if (message:is_trigger()) then
+                play_full_stop_hard() 
+              end
+            end
 }
 
 function play_full_stop_hard()
