@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RenoiseScriptingTool doc_version="0">
+  <ApiVersion>3</ApiVersion>
+  <Id>de.airmann.FullStop</Id>
+  <Version>1.01</Version>
+  <Author>Matthias Ehrmann [airmann_pub@online.de]</Author>
+  <Name>FullStop</Name>
+  <Category>command</Category>
+  <Description>provides a new Renoise command: "play / full stop" which stops all dsp sounds immediately"</Description>
+  <Homepage>http://code.google.com/p/airmann-mixing-tools/</Homepage>
+</RenoiseScriptingTool>
